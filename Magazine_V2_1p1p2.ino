@@ -41,7 +41,7 @@ int AMBIENT_WITHOUT_CHUTE_PIN = 41; // LED ambient without chute level indicator
 int AMBIENT_WITH_CHUTE_PIN = 43; // LED ambient with chute level indicator
 int TILE_REFLECTION_PIN = 42; // LED for tile reflection level indicator
 
-							  // LED pins for status indicators
+// LED pins for status indicators
 int READY_LED_PIN = 47;
 int FAIL_LED_PIN = 48;
 int ERROR_LED_PIN = 49;
@@ -61,7 +61,6 @@ int SERVO_REST = 15;
 int SERVO_PUSH = 165;
 int SENSOR_TRIGGER_UPPER_DELTA = 20;
 int SENSOR_TRIGGER_LOWER_DELTA = 10;
-unsigned long RESET_PRESET_TIME = 3000;
 boolean ENABLE_SERIAL_MONITOR = false;
 unsigned long SHORT_PRESS_DURATION = 3000;
 
@@ -102,6 +101,7 @@ int button_state;
 int first_empty_chute;
 int mode = 0; // 0=setup; 1=operation; 2=comms; 3=error
 
+
 // Update cartridges present
 void setup_cartridges() {
 	for (int i = 0; i<8; i++) {
@@ -124,9 +124,9 @@ void update_LEDs() {
 	digitalWrite(FAIL_PIN, fail);
 	digitalWrite(ERROR_LED_PIN, !error);
 	digitalWrite(ERROR_PIN, error);
-	digitalWrite(DETECTOR_CHUTE_LED_PIN, detector_chute);
+	digitalWrite(DETECTOR_CHUTE_LED_PIN, !detector_chute);
 	for (int i = 0; i<8; i++) {
-		digitalWrite(INDICATOR_PIN[i], indicator[i]);
+		digitalWrite(INDICATOR_PIN[i], !indicator[i]);
 	}
 }
 
@@ -168,6 +168,7 @@ unsigned long time_button_pressed(unsigned long start_time) {
 	}
 	return time_passed(start_time);
 }
+
 
 // Wait for button press, flash LEDs to indicate waiting, return button press duration
 unsigned long button_press(boolean flash) {
