@@ -331,4 +331,5 @@ void setup() {
 void loop() {
 	// put your main code here, to run repeatedly:
 	Serial.print("test");
+	Serial.print("test2");
 }
