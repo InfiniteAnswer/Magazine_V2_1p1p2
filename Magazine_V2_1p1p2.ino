@@ -51,18 +51,19 @@ int READY_PIN = 52; // to controller AND to indicator
 int FAIL_PIN = 51; // to controller AND to indicator
 int ERROR_PIN = 50; // to controller AND to indicator
 
-					// USART TX RX
+// USART TX RX
 int TX_PIN = 1; // transmit
 int RX_PIN = 0; // receive
 
 
-				// Declare constants
+// Declare constants
 int SERVO_REST = 15;
 int SERVO_PUSH = 165;
 int SENSOR_TRIGGER_UPPER_DELTA = 20;
 int SENSOR_TRIGGER_LOWER_DELTA = 10;
 unsigned long RESET_PRESET_TIME = 3000;
 boolean ENABLE_SERIAL_MONITOR = false;
+unsigned long SHORT_PRESS_DURATION = 3000;
 
 
 // Declare variables
@@ -97,11 +98,12 @@ int cartridge_present[8];
 int detector_level;
 unsigned long timeout = 5000;
 unsigned long time_start;
+int button_state;
+int first_empty_chute;
 int mode = 0; // 0=setup; 1=operation; 2=comms; 3=error
 
-
-			  // Update cartridges present
-void update_cartridge_state() {
+// Update cartridges present
+void setup_cartridges() {
 	for (int i = 0; i<8; i++) {
 		cartridge_present[i] = digitalRead(CARTRIDGE_uSW_PIN[i]);
 	}
@@ -124,7 +126,7 @@ void update_LEDs() {
 	digitalWrite(ERROR_PIN, error);
 	digitalWrite(DETECTOR_CHUTE_LED_PIN, detector_chute);
 	for (int i = 0; i<8; i++) {
-		digitalWrite(INDICATOR_PIN[I], indicator[i]);
+		digitalWrite(INDICATOR_PIN[i], indicator[i]);
 	}
 }
 
@@ -146,9 +148,9 @@ unsigned long time_passed(unsigned long start_time) {
 // Calculate flashing state based on period and start time
 int flash_state(unsigned long period, unsigned long start_time) {
 	unsigned long elapsed_time = time_passed(start_time);
-	unsigned long = elapsed_time / period;
+	unsigned long count = elapsed_time / period;
 	int state;
-	if (elapsed_time % 2 == 0) {
+	if (count % 2 == 0) {
 		state = LOW;
 	}
 	else {
@@ -157,6 +159,15 @@ int flash_state(unsigned long period, unsigned long start_time) {
 	return state;
 }
 
+
+// Time a button press
+unsigned long time_button_pressed(unsigned long start_time) {
+	int button_state = digitalRead(BUTTON_PIN);
+	while (button_state == LOW) {
+		delay(50);
+	}
+	return time_passed(start_time);
+}
 
 // Wait for button press, flash LEDs to indicate waiting, return button press duration
 unsigned long button_press(boolean flash) {
@@ -242,7 +253,7 @@ void setup_ambient_levels() {
 	running_total = 0;
 	for (int i = 0; i < 9; i++) {
 		measurement_time = millis();
-		while (time_passed(measurement_time) < sample_time) {
+		while (time_passed(measurement_time) < SAMPLE_TIME) {
 			running_total += analogRead(CHUTE_SENS_PIN[i]);
 			number_measurements++;
 			digitalWrite(AMBIENT_WITH_CHUTE_PIN, flash_state(PERIOD, start_time));
@@ -263,7 +274,7 @@ void setup_ambient_levels() {
 	running_total = 0;
 	for (int i = 0; i < 8; i++) {
 		measurement_time = millis();
-		while (time_passed(measurement_time) < sample_time) {
+		while (time_passed(measurement_time) < SAMPLE_TIME) {
 			running_total += analogRead(CHUTE_SENS_PIN[i]);
 			number_measurements++;
 			digitalWrite(TILE_REFLECTION_PIN, flash_state(PERIOD, start_time));
@@ -288,13 +299,109 @@ void setup_ambient_levels() {
 }
 
 
-void communicate_status() {
+// Startup check
+void startup_check() {
+	delay(1000);
+	for (int i = 0; i<3; i++) {
+		digitalWrite(COMMS_LED_PIN, HIGH);
+		delay(25);
+		digitalWrite(COMMS_TX_LED_PIN, HIGH);
+		delay(25);
+		digitalWrite(COMMS_RX_LED_PIN, HIGH);
+		delay(25);
+		digitalWrite(COMMS_LED_PIN, LOW);
+		delay(25);
+		digitalWrite(COMMS_TX_LED_PIN, LOW);
+		delay(25);
+		digitalWrite(COMMS_RX_LED_PIN, LOW);
+		delay(25);
+	}
+	delay(250);
 
+	for (int i = 0; i<3; i++) {
+		digitalWrite(DETECTOR_CHUTE_LED_PIN, HIGH);
+		delay(10);
+		for (int i = 0; i < 8; i++) {
+			digitalWrite(INDICATOR_PIN[i], HIGH);
+			delay(10);
+		}
+		digitalWrite(DETECTOR_CHUTE_LED_PIN, LOW);
+		delay(10);
+		for (int i = 0; i < 8; i++) {
+			digitalWrite(INDICATOR_PIN[i], LOW);
+			delay(10);
+		}
+	}
+	delay(250);
+
+	for (int i = 0; i<3; i++) {
+		digitalWrite(AMBIENT_WITHOUT_CHUTE_PIN, HIGH);
+		delay(25);
+		digitalWrite(AMBIENT_WITH_CHUTE_PIN, HIGH);
+		delay(25);
+		digitalWrite(TILE_REFLECTION_PIN, HIGH);
+		delay(25);
+		digitalWrite(AMBIENT_WITHOUT_CHUTE_PIN, LOW);
+		delay(25);
+		digitalWrite(AMBIENT_WITH_CHUTE_PIN, LOW);
+		delay(25);
+		digitalWrite(TILE_REFLECTION_PIN, LOW);
+		delay(25);
+	}
+	delay(250);
+
+	for (int i = 0; i < 3; i++) {
+		digitalWrite(ERROR_LED_PIN, HIGH);
+		delay(250);
+		digitalWrite(FAIL_LED_PIN, HIGH);
+		delay(25);
+		digitalWrite(READY_LED_PIN, HIGH);
+		delay(25);
+		digitalWrite(ERROR_LED_PIN, LOW);
+		delay(25);
+		digitalWrite(FAIL_LED_PIN, LOW);
+		delay(25);
+		digitalWrite(READY_LED_PIN, LOW);
+		delay(25);
+	}
+	delay(250);
+
+	for (int i = 0; i<3; i++) {
+		digitalWrite(COMMS_LED_PIN, LOW);
+		digitalWrite(COMMS_TX_LED_PIN, LOW);
+		digitalWrite(COMMS_RX_LED_PIN, LOW);
+		digitalWrite(DETECTOR_CHUTE_LED_PIN, LOW);
+		for (int i = 0; i < 8; i++) {
+			digitalWrite(INDICATOR_PIN[i], LOW);
+		}
+		digitalWrite(AMBIENT_WITHOUT_CHUTE_PIN, LOW);
+		digitalWrite(AMBIENT_WITH_CHUTE_PIN, LOW);
+		digitalWrite(TILE_REFLECTION_PIN, LOW);
+		digitalWrite(ERROR_LED_PIN, LOW);
+		digitalWrite(FAIL_LED_PIN, LOW);
+		digitalWrite(READY_LED_PIN, LOW);
+		delay(250);
+
+		digitalWrite(COMMS_LED_PIN, HIGH);
+		digitalWrite(COMMS_TX_LED_PIN, HIGH);
+		digitalWrite(COMMS_RX_LED_PIN, HIGH);
+		digitalWrite(DETECTOR_CHUTE_LED_PIN, HIGH);
+		for (int i = 0; i < 8; i++) {
+			digitalWrite(INDICATOR_PIN[i], HIGH);
+		}
+		digitalWrite(AMBIENT_WITHOUT_CHUTE_PIN, HIGH);
+		digitalWrite(AMBIENT_WITH_CHUTE_PIN, HIGH);
+		digitalWrite(TILE_REFLECTION_PIN, HIGH);
+		digitalWrite(ERROR_LED_PIN, HIGH);
+		digitalWrite(FAIL_LED_PIN, HIGH);
+		digitalWrite(READY_LED_PIN, HIGH);
+		delay(250);
+	}
 }
 
 
-void button_pressed() {
-
+void communicate_status() {
+	
 }
 
 
@@ -308,8 +415,38 @@ void long_press() {
 }
 
 
-void chute_detected() {
+int scan_for_detector_chute() {
+	int value = analogRead(CHUTE_SENS_PIN[8]);
+	int state = LOW;
+	if (value > (chute_sens_empty[8] - SENSOR_TRIGGER_LOWER_DELTA)) {
+		state = HIGH;
+	}
+	return state;
+}
 
+
+int scan_for_empty_chute() {
+	int value;
+	int state = 9;
+	boolean compare_lower;
+	boolean compare_upper;
+	for (int i = 0; i < 8; i++) {
+		value = analogRead(CHUTE_SENS_PIN[i]);
+		compare_lower = value > (chute_sens_full[i] - SENSOR_TRIGGER_LOWER_DELTA);
+		if (compare_lower) {
+			state = i;
+			break;
+		}
+	}
+	return state;
+}
+
+
+void refill_empty(int chute_number) {
+	servoX[chute_number].write(170);
+	delay(500);
+	servoX[chute_number].write(5);
+	delay(500);
 }
 
 
@@ -324,12 +461,33 @@ void update_cartridge_status() {
 
 
 void setup() {
-	// put your setup code here, to run once:
-
+	startup_check();
+	setup_ambient_levels();
+	setup_cartridges();
+	communicate_status();
+	button_press(true);
 }
 
+
 void loop() {
-	// put your main code here, to run repeatedly:
-	Serial.print("test");
-	Serial.print("test2");
+	button_state = digitalRead(BUTTON_PIN);
+	if (button_state == LOW) {
+		time_switch_released = time_button_pressed(millis());
+		if (time_switch_released > SHORT_PRESS_DURATION) {
+			// restart
+		}
+		else {
+			// reevaluate state, communicate status, and pause
+		}
+	}
+
+	// Check for errors
+
+	if (scan_for_detector_chute() == HIGH) {
+		first_empty_chute = scan_for_empty_chute();
+		if (first_empty_chute < 9) {
+			refill_empty(first_empty_chute);
+		}
+	}
+	delay(20);
 }
