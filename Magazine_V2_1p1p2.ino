@@ -104,7 +104,7 @@ int first_empty_chute;
 int mode = 0; // 0=setup; 1=operation; 2=comms; 3=error
 
 
-// Update cartridges present
+// Setup cartridges present
 void setup_cartridges() {
 	for (int i = 0; i<8; i++) {
 		cartridge_present[i] = digitalRead(CARTRIDGE_uSW_PIN[i]);
@@ -435,12 +435,20 @@ void communicate_status() {
 
 
 void short_press() {
-
+    button_press(true);
+    setup_cartridges();
+    update_LEDs();
+    communicate_status();
+    button_press(true);
 }
 
 
 void long_press() {
-
+    startup_check();
+    setup_cartridges();
+	setup_ambient_levels();
+	communicate_status();
+	button_press(true);
 }
 
 
@@ -490,20 +498,10 @@ void refill_empty(int chute_number) {
 }
 
 
-unsigned long time_passed() {
-
-}
-
-
-void update_cartridge_status() {
-
-}
-
-
 void setup() {
 	startup_check();
-	setup_ambient_levels();
 	setup_cartridges();
+	setup_ambient_levels();
 	communicate_status();
 	button_press(true);
 }
@@ -514,10 +512,12 @@ void loop() {
 	if (button_state == LOW) {
 		time_switch_released = time_button_pressed(millis());
 		if (time_switch_released > SHORT_PRESS_DURATION) {
-			// restart
+			// soft restart
+			long_press();
 		}
 		else {
 			// pause, reevaluate state, communicate status, and pause
+			short_press();
 		}
 	}
 
