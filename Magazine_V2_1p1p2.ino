@@ -94,6 +94,8 @@ int chute_sens_ambient[9];
 int chute_sens_empty[9];
 int chute_sens_full[8];
 int cartridge_present[8];
+int current_chute_scan[8];
+int previous_chute_scan[8];
 int detector_level;
 unsigned long timeout = 5000;
 unsigned long time_start;
@@ -233,6 +235,12 @@ void setup_ambient_levels() {
 	// average and store
 	running_total = 0;
 	for (int i = 0; i < 9; i++) {
+	    if (i<8) {
+	        digitalWrite(INDICATOR_PIN[i], LOW);
+	    }
+	    else {
+	        digitalWrite(DETECTOR_CHUTE_LED_PIN, LOW);
+	    }
 		measurement_time = millis();
 		while (time_passed(measurement_time) < SAMPLE_TIME) {
 			running_total += analogRead(CHUTE_SENS_PIN[i]);
@@ -241,11 +249,17 @@ void setup_ambient_levels() {
 			delay(50);
 		}
 		chute_sens_ambient[i] = running_total / number_measurements;
+		if (i<8) {
+	        digitalWrite(INDICATOR_PIN[i], HIGH);
+	    }
+	    else {
+	        digitalWrite(DETECTOR_CHUTE_LED_PIN, HIGH);
+	    }
 	}
 
 	// indicate that ambient without chute measurement is complete with solid LED
 	ambient_without_chute = HIGH;
-	digitalWrite(AMBIENT_WITHOUT_CHUTE_PIN, ambient_without_chute);
+	digitalWrite(AMBIENT_WITHOUT_CHUTE_PIN, !ambient_without_chute);
 
 	// wait for button press before advancing
 	button_press(true);
@@ -253,6 +267,12 @@ void setup_ambient_levels() {
 	// indicate that measuring the ambient with chute by flashing the LED
 	running_total = 0;
 	for (int i = 0; i < 9; i++) {
+	    if (i<8) {
+	        digitalWrite(INDICATOR_PIN[i], LOW);
+	    }
+	    else {
+	        digitalWrite(DETECTOR_CHUTE_LED_PIN, LOW);
+	    }
 		measurement_time = millis();
 		while (time_passed(measurement_time) < SAMPLE_TIME) {
 			running_total += analogRead(CHUTE_SENS_PIN[i]);
@@ -261,11 +281,17 @@ void setup_ambient_levels() {
 			delay(50);
 		}
 		chute_sens_empty[i] = running_total / number_measurements;
+		if (i<8) {
+	        digitalWrite(INDICATOR_PIN[i], HIGH);
+	    }
+	    else {
+	        digitalWrite(DETECTOR_CHUTE_LED_PIN, HIGH);
+	    }
 	}
 
 	// indicate that ambient with chute measurement is complete with solid LED
 	ambient_with_chute = HIGH;
-	digitalWrite(AMBIENT_WITH_CHUTE_PIN, ambient_with_chute);
+	digitalWrite(AMBIENT_WITH_CHUTE_PIN, !ambient_with_chute);
 
 	// wait for button press before advancing
 	button_press(true);
@@ -274,6 +300,7 @@ void setup_ambient_levels() {
 	// cycle through the 8 measurements instead of 9 for previous 2 measurements
 	running_total = 0;
 	for (int i = 0; i < 8; i++) {
+	    digitalWrite(INDICATOR_PIN[i], LOW);
 		measurement_time = millis();
 		while (time_passed(measurement_time) < SAMPLE_TIME) {
 			running_total += analogRead(CHUTE_SENS_PIN[i]);
@@ -282,11 +309,12 @@ void setup_ambient_levels() {
 			delay(50);
 		}
 		chute_sens_full[i] = running_total / number_measurements;
+		digitalWrite(INDICATOR_PIN[i], HIGH);
 	}
 
 	// indicate that reflected tile level measurement is complete with solid LED
 	tile_reflection = HIGH;
-	digitalWrite(TILE_REFLECTION_PIN, tile_reflection);
+	digitalWrite(TILE_REFLECTION_PIN, !tile_reflection);
 
 	// wait for button press before advancing
 	button_press(true);
@@ -430,14 +458,25 @@ int scan_for_empty_chute() {
 	int value;
 	int state = 9;
 	boolean compare_lower;
-	boolean compare_upper;
+	current_chute_scan = {
+	    HIGH, HIGH, HIGH, HIGH, HIGH, HIGH, HIGH, HIGH
+	    }
 	for (int i = 0; i < 8; i++) {
-		value = analogRead(CHUTE_SENS_PIN[i]);
-		compare_lower = value > (chute_sens_full[i] - SENSOR_TRIGGER_LOWER_DELTA);
-		if (compare_lower) {
-			state = i;
-			break;
-		}
+	    if (cartridge_present[i] == LOW) {
+	        value = analogRead(CHUTE_SENS_PIN[i]);
+            compare_lower = value > (chute_sens_full[i] - SENSOR_TRIGGER_LOWER_DELTA);
+            if (compare_lower) {
+                current_chute_scan[i] = LOW;
+                // State = 1st empty chute OR 9 if no chute OR 10 if more than 1 chute
+                if (state == 9) {
+                    state = i;
+                }
+                else {
+                    state = 10;
+                }
+            }
+	    }
+		
 	}
 	return state;
 }
@@ -478,7 +517,7 @@ void loop() {
 			// restart
 		}
 		else {
-			// reevaluate state, communicate status, and pause
+			// pause, reevaluate state, communicate status, and pause
 		}
 	}
 
